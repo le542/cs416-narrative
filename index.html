@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A Decade at the Box Office</title>
+
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+  <main class="page-shell">
+    <header class="story-header">
+      <p class="mini-title">A DECADE AT THE BOX OFFICE</p>
+      <h1 id="scene-heading"></h1>
+      <p id="scene-copy" class="scene-copy"></p>
+    </header>
+
+    <section class="chart-card">
+      <div class="scene-head">
+        <span id="scene-progress"></span>
+      </div>
+
+      <div id="chart" class="chart-container"></div>
+
+      <div class="navigation">
+        <button id="previous-button" type="button">Previous</button>
+        <button id="next-button" type="button">Next</button>
+      </div>
+    </section>
+
+    <p id="status" class="status" role="status"></p>
+  </main>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+
+  <script src="script.js"></script>
+</body>
+</html>

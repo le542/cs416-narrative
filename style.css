@@ -1,0 +1,189 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #cbd2cb;
+  color: #202124;
+}
+
+.page-shell {
+  width: min(1120px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 56px 0 72px;
+}
+
+.story-header {
+  max-width: 900px;
+  margin-bottom: 30px;
+}
+
+.mini-title {
+  margin: 0 0 8px;
+  color: #112e08;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0;
+}
+
+.scene-copy {
+  margin: 22px 0 0;
+  color: #5f6368;
+  line-height: 1.7;
+}
+
+.chart-card {
+  padding: 24px;
+  border: 1px solid #d9dce1;
+  background: #ffffff;
+}
+
+.scene-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  color: #5f6368;
+  font-weight: 700;
+}
+
+.chart-container {
+  width: 100%;
+  min-height: 540px;
+}
+
+svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.axis text {
+  fill: #5f6368;
+}
+
+.axis path,
+.axis line {
+  stroke: #9aa0a6;
+}
+
+.grid line {
+  stroke: #e4e7eb;
+}
+
+.grid path {
+  display: none;
+}
+
+.axis-label {
+  fill: #202124;
+  font-weight: 700;
+}
+
+.data-line {
+  fill: none;
+  stroke: #0e702f;
+  stroke-width: 4;
+}
+
+.data-point {
+  fill: #ffffff;
+  stroke: #184419;
+  stroke-width: 4;
+}
+
+.data-point-red {
+  fill: #ffffff;
+  stroke: #b3261e;
+  stroke-width: 4;
+}
+
+.value-label {
+  fill: #202124;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.annotation-box {
+  fill: #eaf1fb;
+  stroke: #2457a6;
+  stroke-width: 1.5;
+}
+
+.annotation-box-red {
+  fill: #fce8e6;
+  stroke: #b3261e;
+  stroke-width: 1.5;
+}
+
+.annotation-heading {
+  fill: #202124;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.annotation-text {
+  fill: #202124;
+  font-size: 13px;
+}
+
+.annotation-line {
+  stroke: #2457a6;
+  stroke-width: 2;
+}
+
+.annotation-line-red {
+  stroke: #c50f0f;
+  stroke-width: 2;
+}
+
+.navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+button {
+  min-width: 130px;
+  padding: 12px 18px;
+  border: 1px solid #0ead76;
+  background: #44d08f;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+button:disabled {
+  border-color: #c8ccd2;
+  background: #eceef1;
+  color: #979ca3;
+}
+
+.legend {
+  font-size: 12px;
+  fill: #202124;
+}
+
+.status {
+  min-height: 24px;
+  margin: 16px 0 0;
+  color: #5f6368;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 10;
+  max-width: 260px;
+  padding: 10px 12px;
+  border: 1px solid #2f3033;
+  background: rgba(255, 255, 255, 0.97);
+}

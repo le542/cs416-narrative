@@ -2,9 +2,12 @@ const DATA_PATH = "dataset.csv";
 
 let currentScene = 1;
 let selectedMetric = "gross";
+let normalizeSceneFour = true;
+let selectedGenres = new Set();
 let movieData = [];
+let allGenres = [];
 
-const TOTAL_SCENES = 3;
+const TOTAL_SCENES = 4;
 
 const margin = {
   top: 60,
@@ -41,7 +44,11 @@ const sceneText = {
     description:
       "The recovery was not evenly distributed across genres. Action films generated more than half of top-ranked box-office revenue in both 2021 and 2022, showing how heavily the first phase of the rebound depended on this genre. Hover over bar chart to see the percentages of other genres."
   }
-  // add more scenes?
+  ,
+  4: {
+    heading: "Explore Genre Market Share",
+    description: "Explore how the market share of different genres has evolved. Use the checkboxes to add or remove genres from the chart. Toggle 'Normalize to 100%' to see shares relative to only the selected genres, or relative to the entire market. The data for 2026 is incomplete, and some years may have no data for niche genres."
+  }
 };
 
 function parseRow(d) {
@@ -79,10 +86,12 @@ function renderScene() {
   d3.select("#next-button")
     .property("disabled", currentScene === TOTAL_SCENES);
 
+  d3.select("#genre-filter").style("display", currentScene === 4 ? "flex" : "none");
   d3.select("#metric-selector").style("display", "block");
+  d3.select("#normalize-filter").style("display", currentScene === 4 ? "block" : "none");
 
   const metricLabels = d3.select("#metric-select").selectAll("option");
-  if (currentScene === 3) {
+  if (currentScene >= 3) {
     metricLabels.nodes()[0].textContent = "Share of Annual Gross";
     metricLabels.nodes()[1].textContent = "Share of Ticket Sales";
   } else {
@@ -96,8 +105,8 @@ function renderScene() {
     renderSceneTwo(movieData);
   } else if (currentScene === 3) {
     renderSceneThree(movieData);
-  } else {
-    // .... have some more ideas but I dont think i hvae time
+  } else if (currentScene === 4) { // Scene 4 is the exploratory scene
+    renderSceneFour(movieData);
   }
 }
 
@@ -539,6 +548,158 @@ function renderSceneThree(data) {
   });
 }
 
+function renderSceneFour(data) {
+  const filtered = data.filter(d => d.year >= 2016 && d.year <= 2026);
+
+  if (selectedGenres.size === 0) {
+    allGenres.forEach(g => selectedGenres.add(g));
+  }
+
+  const isGross = selectedMetric === "gross";
+  const yAxisLabel = isGross ? "Share of annual gross" : "Share of annual ticket sales";
+
+  const byYear = d3.rollup(filtered,
+    rows => {
+      const total = d3.sum(rows, d => d[selectedMetric]);
+      let totalSelectedGenresForYear = 0;
+      const genreAbsoluteValues = {};
+
+      selectedGenres.forEach(genre => {
+        const value = d3.sum(rows.filter(d => d.genre === genre), d => d[selectedMetric]);
+        genreAbsoluteValues[genre] = value;
+        totalSelectedGenresForYear += value;
+      });
+
+      const shares = {};
+      selectedGenres.forEach(genre => {
+        const genreValue = genreAbsoluteValues[genre];
+        const denominator = normalizeSceneFour ? totalSelectedGenresForYear : total;
+        shares[genre] = denominator > 0 ? genreValue / denominator : 0;
+      });
+      return { shares, totalAllGenres: total, totalSelectedGenres: totalSelectedGenresForYear, genreAbsoluteValues };
+    },
+    d => d.year
+  );
+
+  const sceneData = Array.from(byYear, ([year, data]) => ({
+    year,
+    totalAllGenres: data.totalAllGenres,
+    totalSelectedGenres: data.totalSelectedGenres,
+    genreAbsoluteValues: data.genreAbsoluteValues,
+    ...data.shares,
+  })).sort((a, b) => d3.ascending(a.year, b.year));
+
+  const categories = Array.from(selectedGenres);
+  const stack = d3.stack().keys(categories)(sceneData);
+  const {svg, plot} = createSvg();
+
+  const x = d3.scaleBand().domain(sceneData.map(d => d.year)).range([0, width]).padding(0.16);
+  const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
+
+  plot.append("g")
+    .attr("class", "grid")
+    .call(d3.axisLeft(y).ticks(6).tickSize(-width).tickFormat(""));
+
+  plot.append("g")
+    .attr("class", "axis")
+    .attr("transform", `translate(0,${height})`)
+    .call(d3.axisBottom(x).tickSizeOuter(0));
+
+  plot.append("g")
+    .attr("class", "axis")
+    .call(d3.axisLeft(y).ticks(6).tickFormat(formatPercent));
+
+  svg.append("text")
+    .attr("class", "axis-label")
+    .attr("x", margin.left + width / 2)
+    .attr("y", outerHeight - 18).attr("text-anchor", "middle")
+    .text("Ranking year");
+
+  svg.append("text")
+    .attr("class", "axis-label")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -(margin.top + height / 2))
+    .attr("y", 24).attr("text-anchor", "middle")
+    .text(yAxisLabel);
+
+    /** keep colors consistent per scene */
+  const scene3Colors = {
+    "Action": "#cb71c8",
+    "Adventure": "#6980f5",
+    "Comedy": "#ca5153",
+    "Horror": "#d8b784",
+    "Other": "#d9d9d9af"
+  };
+
+  const otherGenres = allGenres.filter(g => !scene3Colors[g]);
+  const color = d3.scaleOrdinal()
+    .domain(Object.keys(scene3Colors).concat(otherGenres))
+    .range(Object.values(scene3Colors).concat(d3.schemeTableau10));
+
+
+  plot.selectAll(".series").data(stack)
+    .join("g")
+    .attr("fill", d => color(d.key))
+    .selectAll("rect")
+    .data(series => series.map(d => ({ ...d, key: series.key, genreAbsoluteValue: d.data.genreAbsoluteValues[series.key] })))
+    .join("rect")
+    .attr("x", d => x(d.data.year))
+    .attr("y", d => y(d[1]))
+    .attr("height", d => y(d[0]) - y(d[1]))
+    .attr("width", x.bandwidth())
+    .on("mousemove", function(event, d) {
+      const isGross = selectedMetric === "gross";
+      const yFormat = isGross ? formatBillions : formatMillions;
+      const shareValue = d.data[d.key];
+      const genreAbsoluteValue = d.genreAbsoluteValue;
+
+      let totalForYearText;
+      if (normalizeSceneFour) {
+          totalForYearText = `Total for selected genres in ${d.data.year}: ${yFormat(d.data.totalSelectedGenres)}`;
+      } else {
+          totalForYearText = `Total for all genres in ${d.data.year}: ${yFormat(d.data.totalAllGenres)}`;
+      }
+
+      showTooltip(
+        event,
+        `<b>${d.data.year}</b><br>${d.key}: ${formatPercent(shareValue)}<br>` +
+        `Total for ${d.key}: ${yFormat(genreAbsoluteValue)}<br>` +
+        totalForYearText
+      );
+    })
+    .on("mouseleave", hideTooltip);
+
+  const filterContainer = d3.select("#genre-filter");
+  const normalizeFilterContainer = d3.select("#normalize-filter");
+  filterContainer.select(".genre-filter-controls").html("");
+  normalizeFilterContainer.html("");
+  normalizeFilterContainer.html(`
+    <label><input type="checkbox" id="normalize-checkbox" ${normalizeSceneFour ? "checked" : ""}> Normalize to 100%</label>
+  `);
+
+  filterContainer.select(".genre-filter-controls")
+    .selectAll(".genre-checkbox-item")
+    .data(allGenres, d => d)
+    .join("div")
+    .attr("class", "genre-checkbox-item")
+    .html(d => `<input type="checkbox" id="genre-${d.replace(/\s+/g, '-')}" value="${d}" ${selectedGenres.has(d) ? "checked" : ""}>
+      <label for="genre-${d.replace(/\s+/g, '-')}">${d}</label>`)
+    .select("input")
+    .on("change", function(event, d) {
+      if (this.checked) {
+        selectedGenres.add(d);
+      } else {
+        selectedGenres.delete(d);
+      }
+      renderSceneFour(movieData);
+    });
+
+  d3.select("#normalize-checkbox").on("change", function() {
+    normalizeSceneFour = this.checked;
+    renderSceneFour(movieData);
+  });
+}
+
 function addLegend(svg, categories, color) {
   const legend = svg.append("g").attr("transform", `translate(${margin.left},${outerHeight - 48})`);
 
@@ -567,6 +728,9 @@ function hideTooltip() {
 d3.csv(DATA_PATH, parseRow)
   .then(data => {
     movieData = data.filter(validRow);
+    allGenres = Array.from(new Set(movieData.map(d => d.genre))).sort(d3.ascending);
+    selectedGenres = new Set(allGenres);
+
     renderScene();
   })
   .catch(error => {

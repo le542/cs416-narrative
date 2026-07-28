@@ -1,6 +1,7 @@
 const DATA_PATH = "dataset.csv";
 
 let currentScene = 1;
+let selectedMetric = "gross";
 let movieData = [];
 
 const TOTAL_SCENES = 3;
@@ -19,6 +20,8 @@ const height = outerHeight - margin.top - margin.bottom;
 
 const formatBillions = value =>
   `$${d3.format(".2f")(value / 1_000_000_000)}B`; // make it look like "$14.03B"
+
+const formatMillions = value => `${d3.format(".2s")(value).replace(/G/, "B").replace(/M/, "M")} tickets`;
 
 const formatPercent = d3.format(".1%");
 
@@ -76,6 +79,17 @@ function renderScene() {
   d3.select("#next-button")
     .property("disabled", currentScene === TOTAL_SCENES);
 
+  d3.select("#metric-selector").style("display", "block");
+
+  const metricLabels = d3.select("#metric-select").selectAll("option");
+  if (currentScene === 3) {
+    metricLabels.nodes()[0].textContent = "Share of Annual Gross";
+    metricLabels.nodes()[1].textContent = "Share of Ticket Sales";
+  } else {
+    metricLabels.nodes()[0].textContent = "Inflation-adjusted Gross";
+    metricLabels.nodes()[1].textContent = "Estimated Tickets Sold";
+  }
+
   if (currentScene === 1) {
     renderSceneOne(movieData);
   } else if (currentScene === 2) {
@@ -104,6 +118,17 @@ function annualGrossData(data, startYear, endYear) {
       d => d.year
     ),
     ([year, totalGross]) => ({ year, totalGross })
+  ).sort((a, b) => d3.ascending(a.year, b.year));
+}
+
+/** convert Data from csv into MAP {2016--> value, 2017--- value} etc for a given metric */
+function annualMetricData(data, startYear, endYear, metric) {
+  return Array.from(
+    d3.rollup(data.filter(d => d.year >= startYear && d.year <= endYear),
+      rows => d3.sum(rows, d => d[metric]),
+      d => d.year
+    ),
+    ([year, totalValue]) => ({ year, totalValue })
   ).sort((a, b) => d3.ascending(a.year, b.year));
 }
 
@@ -170,16 +195,20 @@ function addAnnotation({
 
 function renderSceneOne(data) {
   /** only do pre pandemic years */
-  const sceneData = annualGrossData(data, 2016, 2019);
+  const sceneData = annualMetricData(data, 2016, 2019, selectedMetric);
   const { svg, plot } = createSvg();
+
+  const isGross = selectedMetric === "gross";
+  const yFormat = isGross ? formatBillions : formatMillions;
+  const yAxisLabel = isGross ? "Inflation-adjusted gross" : "Estimated tickets sold";
+  const yDomain = isGross ? [12_500_000_000, 14_500_000_000] : [950_000_000, 1_350_000_000];
 
   const x = d3.scalePoint()
     .domain(sceneData.map(d => d.year))
     .range([0, width])
     .padding(0.25);
 
-  const y = d3.scaleLinear()
-    .domain([12_500_000_000, 14_500_000_000]).nice().range([height, 0]);
+  const y = d3.scaleLinear().domain(yDomain).nice().range([height, 0]);
 
    /* grid lines */
   plot.append("g")
@@ -204,20 +233,19 @@ function renderSceneOne(data) {
     .call(
       d3.axisLeft(y)
         .ticks(6)
-        .tickFormat(formatBillions)
+        .tickFormat(yFormat)
     );
   svg.append("text")
     .attr("class", "axis-label")
     .attr("transform", "rotate(-90)")
     .attr("x", -(margin.top + height / 2))
     .attr("y", 24).attr("text-anchor", "middle")
-    .text("Inflation-adjusted gross");
+    .text(yAxisLabel);
 
     /**
      * line
      */
-  const line = d3.line().x(d => x(d.year))
-    .y(d => y(d.totalGross));
+  const line = d3.line().x(d => x(d.year)).y(d => y(d.totalValue));
 
   plot.append("path")
     .datum(sceneData)
@@ -229,7 +257,7 @@ function renderSceneOne(data) {
     .join("circle")
     .attr("class", "data-point")
     .attr("cx", d => x(d.year))
-    .attr("cy", d => y(d.totalGross))
+    .attr("cy", d => y(d.totalValue))
     .attr("r", 7);
 
   plot.selectAll(".value-label")
@@ -237,9 +265,9 @@ function renderSceneOne(data) {
     .join("text")
     .attr("class", "value-label")
     .attr("x", d => x(d.year))
-    .attr("y", d => y(d.totalGross) - 16)
+    .attr("y", d => y(d.totalValue) - 16)
     .attr("text-anchor", "middle")
-    .text(d => formatBillions(d.totalGross));
+    .text(d => yFormat(d.totalValue));
 
   addAnnotation({
     plot,
@@ -248,19 +276,25 @@ function renderSceneOne(data) {
     boxWidth: 285,
     boxHeight: 105,
     targetX: (x(2017) + x(2018)) / 2,
-    targetY: y(d3.mean(sceneData, d => d.totalGross)),
+    targetY: y(d3.mean(sceneData, d => d.totalValue)),
     heading: "A stable baseline",
-    lines: [
-      "Annual adjusted gross remained",
-      "between about $13B and $14B",
-      "from 2016 through 2019."
-    ]
+    lines: (isGross
+    ? ["Annual adjusted gross remained", "between about $13B and $14B", "from 2016 through 2019."]
+    : ["Annual ticket sales remained", "between about 1.2B and 1.3B", "from 2016 through 2019."])
   });
 }
 
 function renderSceneTwo(data) {
-  const sceneData = annualGrossData(data, 2016, 2025); //exclude 2026 bc incomplete
+  const sceneData = annualMetricData(data, 2016, 2025, selectedMetric); //exclude 2026 bc incomplete
   const { svg, plot } = createSvg();
+
+  const isGross = selectedMetric === "gross";
+  const yFormat = isGross ? formatBillions : formatMillions;
+  const yAxisLabel = isGross ? "Inflation-adjusted gross" : "Estimated tickets sold";
+  
+  const value2019 = sceneData.find(d => d.year === 2019).totalValue;
+  const value2020 = sceneData.find(d => d.year === 2020).totalValue;
+  const collapsePercent = (value2019 - value2020) / value2019;
 
   const x = d3.scalePoint()
     .domain(sceneData.map(d => d.year))
@@ -268,7 +302,7 @@ function renderSceneTwo(data) {
     .padding(0.15);
 
   const y = d3.scaleLinear()
-    .domain([0, d3.max(sceneData, d => d.totalGross)])
+    .domain([0, d3.max(sceneData, d => d.totalValue)])
     .nice()
     .range([height, 0]);
 
@@ -287,7 +321,7 @@ function renderSceneTwo(data) {
     .attr("class", "axis")
     .call(d3.axisLeft(y)
         .ticks(6)
-        .tickFormat(formatBillions)
+        .tickFormat(yFormat)
     );
 
   svg.append("text")
@@ -301,10 +335,10 @@ function renderSceneTwo(data) {
     .attr("transform", "rotate(-90)")
     .attr("x", -(margin.top + height / 2))
     .attr("y", 24).attr("text-anchor", "middle")
-    .text("Inflation-adjusted gross");
+    .text(yAxisLabel);
 
   const line = d3.line().x(d => x(d.year))
-    .y(d => y(d.totalGross));
+    .y(d => y(d.totalValue));
 
   plot.append("path").datum(sceneData)
     .attr("class", "data-line")
@@ -314,18 +348,18 @@ function renderSceneTwo(data) {
   plot.selectAll(".scene-two-point").data(sceneData).join("circle")
     .attr("class", d => d.year === 2020 ? "data-point-red" : "data-point")
     .attr("cx", d => x(d.year))
-    .attr("cy", d => y(d.totalGross))
+    .attr("cy", d => y(d.totalValue))
     .attr("r", d => d.year === 2020 ? 8 : 6);
 
 
     /** calc statistic values */
   const collapse = sceneData.find(d => d.year === 2020);
   const peakRecovery = sceneData.find(d => d.year === 2023);
-  const prePandemicAverage = d3.mean(
+  const prePandemicAverage = d3.mean( // average per year
     sceneData.filter(d => d.year >= 2016 && d.year <= 2019),
-    d => d.totalGross
+    d => d.totalValue
   );
-  const recoveryPercent = peakRecovery.totalGross / prePandemicAverage;
+  const recoveryPercent = peakRecovery.totalValue / prePandemicAverage;
 
   addAnnotation({
     plot,
@@ -333,13 +367,13 @@ function renderSceneTwo(data) {
     boxY: height * 0.60,
     boxWidth: 250,
     boxHeight: 104,
-    targetX: x(2020),
-    targetY: y(collapse.totalGross),
-    heading: "A 79.8% collapse",
+    targetX: x(collapse.year),
+    targetY: y(collapse.totalValue),
+    heading: `A ${formatPercent(collapsePercent)} collapse`,
     lines: [
-      "Adjusted gross fell from $13.39B",
-      "in 2019 to only $2.71B",
-      "in 2020."
+      `The total fell from ${yFormat(value2019)}`,
+      `in 2019 to only ${yFormat(value2020)}`,
+      `in 2020.`
     ],
     red: true
   });
@@ -350,8 +384,8 @@ function renderSceneTwo(data) {
     boxY: 35,
     boxWidth: 285,
     boxHeight: 104,
-    targetX: x(2023),
-    targetY: y(peakRecovery.totalGross),
+    targetX: x(peakRecovery.year),
+    targetY: y(peakRecovery.totalValue),
     heading: "Recovery remained partial",
     lines: [
       `The 2023 peak reached only`,
@@ -365,28 +399,32 @@ function renderSceneThree(data) {
   const filtered = data.filter(d => d.year >= 2016 && d.year <= 2026);
 
   /** stacked bar chart */
+  const isGross = selectedMetric === "gross";
+  const yAxisLabel = isGross ? "Share of annual gross" : "Share of annual ticket sales";
+
   const topGenres = ["Action", "Adventure", "Comedy", "Horror"];
   const byYear = d3.rollup(filtered,
     rows => {
-      const total = d3.sum(rows, d => d.gross);
+      const total = d3.sum(rows, d => d[selectedMetric]);
       const shares = {};
       let topGenresGross = 0;
 
       topGenres.forEach(genre => {
-        const genreGross = d3.sum(rows.filter(d => d.genre === genre), d => d.gross);
-        shares[genre] = genreGross / total;
+        const genreGross = d3.sum(rows.filter(d => d.genre === genre), d => d[selectedMetric]);
+        shares[genre] = total > 0 ? genreGross / total : 0;
         topGenresGross += genreGross;
       });
 
-      shares.Other = (total - topGenresGross) / total;
-      return shares;
+      shares.Other = total > 0 ? (total - topGenresGross) / total : 0;
+      return { shares, total };
     },
     d => d.year
   );
 
-  const sceneData = Array.from(byYear, ([year, shares]) => ({
+  const sceneData = Array.from(byYear, ([year, data]) => ({
     year,
-    ...shares,
+    total: data.total,
+    ...data.shares,
   })).sort((a, b) => d3.ascending(a.year, b.year));
 
   const categories = [...topGenres, "Other"];
@@ -423,7 +461,7 @@ function renderSceneThree(data) {
     .attr("transform", "rotate(-90)")
     .attr("x", -(margin.top + height / 2))
     .attr("y", 24).attr("text-anchor", "middle")
-    .text("Share of annual gross");
+    .text(yAxisLabel);
 
   const color = d3.scaleOrdinal()
     .domain(categories)
@@ -440,10 +478,16 @@ function renderSceneThree(data) {
     .attr("height", d => y(d[0]) - y(d[1]))
     .attr("width", x.bandwidth())
     .on("mousemove", function(event, d) {
-      const value = d.data[d.key];
+      const isGross = selectedMetric === "gross";
+      const yFormat = isGross ? formatBillions : formatMillions;
+      const totalValue = d.data[d.key];
+      const shareValue = d.data[d.key];
+      const genreTotalValue = d.data.total * shareValue; // Calculate total for this specific genre
       showTooltip(
         event,
-        `<b>${d.data.year}</b><br>${d.key}: ${formatPercent(value)}`
+        `<b>${d.data.year}</b><br>${d.key}: ${formatPercent(shareValue)}<br>` +
+        `Total for ${d.key}: ${yFormat(genreTotalValue)} <br>` +
+        `Total for ${d.data.year}: ${yFormat(d.data.total)}`
       );
     })
     .on("mouseleave", hideTooltip);
@@ -544,4 +588,10 @@ d3.select("#next-button").on("click", () => {
     currentScene += 1;
     renderScene();
   }
+});
+
+d3.select("#metric-select").on("change", function() {
+  selectedMetric = this.value;
+  // Rerender scene with the new metric
+  renderScene();
 });
